@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modification Code Article</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<style>
+  :root {
+    --bg: #f0ebe3; --bg2: #ffffff; --bg3: #f5f0e8;
+    --text: #3d3529; --text2: #8a7e6b; --accent: #d4915c;
+    --accent2: #c07a45; --green: #d4915c; --red: #c0392b;
+    --orange: #d4a03c; --border: #d9d0c1; --radius: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+
+  /* Header */
+  .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 16px 24px; display:flex; align-items:center; justify-content:space-between; }
+  .header h1 { font-size: 1.3rem; font-weight: 600; }
+  .header .steps { display:flex; gap:8px; }
+  .step-indicator { padding: 6px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; background: var(--bg3); color: var(--text2); cursor: pointer; transition: all 0.2s; }
+  .step-indicator.active { background: var(--accent); color: white; }
+  .step-indicator.done { background: var(--green); color: white; }
+
+  /* Container */
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Cards */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .card h2 { font-size: 1.1rem; margin-bottom: 12px; }
+  .card h3 { font-size: 0.95rem; margin-bottom: 8px; color: var(--text2); }
+
+  /* Upload zones */
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(212,145,92,0.06); }
+  .upload-zone.loaded { border-color: var(--green); border-style: solid; }
+  .upload-zone .icon { font-size: 2rem; margin-bottom: 8px; }
+  .upload-zone .label { font-size: 0.95rem; font-weight: 500; }
+  .upload-zone .info { font-size: 0.8rem; color: var(--text2); margin-top: 4px; }
+  .upload-zone input[type=file] { display: none; }
+  .progress-bar { width: 80%; margin: 10px auto 0; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 4px; transition: width 0.15s ease; }
+
+  /* Buttons */
+  .btn { padding: 8px 20px; border-radius: var(--radius); border: none; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.15s; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-success { background: var(--green); color: white; }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 4px 12px; font-size: 0.78rem; }
+  .btn-group { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; max-height: 60vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead { position: sticky; top: 0; z-index: 2; }
+  th { background: var(--bg3); padding: 8px 10px; text-align: left; font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tr:hover td { background: rgba(212,145,92,0.07); }
+  tr.selected td { background: rgba(212,145,92,0.15); }
+
+  /* Filters */
+  .filters-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .filter-group { display: flex; flex-direction: column; gap: 2px; }
+  .filter-group label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; }
+  .filter-group select, .filter-group input { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; min-width: 120px; }
+
+  /* Summary stats */
+  .stats { display: flex; gap: 16px; margin: 12px 0; flex-wrap: wrap; }
+  .stat { background: var(--bg3); padding: 8px 16px; border-radius: var(--radius); font-size: 0.85rem; }
+  .stat strong { color: var(--accent); }
+
+  /* Warning box */
+  .warning-box { background: rgba(245,158,11,0.1); border: 1px solid var(--orange); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .warning-box .title { color: var(--orange); font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+  .warning-box .ean-list { font-size: 0.82rem; color: var(--text2); max-height: 100px; overflow-y: auto; margin-top: 8px; }
+
+  /* New code form */
+  .code-form { display: flex; flex-direction: column; gap: 10px; }
+  .code-row { display: grid; grid-template-columns: 180px 1fr 200px 200px; gap: 10px; align-items: center; font-size: 0.85rem; padding: 8px 12px; background: var(--bg3); border-radius: var(--radius); }
+  .code-row input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; }
+  .code-row .ean-val { color: var(--accent); font-family: monospace; }
+  .code-row .old-code { color: var(--text2); }
+
+  /* Batch apply */
+  .batch-bar { display:flex; gap:8px; align-items:center; margin-bottom:12px; padding:12px; background:var(--bg3); border-radius:var(--radius); }
+  .batch-bar input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; flex:1; max-width:300px; }
+
+  /* Export section */
+  .export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .export-card { background: var(--bg3); border-radius: var(--radius); padding: 16px; }
+  .export-card h4 { font-size: 0.9rem; margin-bottom: 8px; }
+  .export-card .file-list { font-size: 0.8rem; color: var(--text2); margin-bottom: 8px; }
+
+  /* Checkbox */
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+  /* Validation errors */
+  .errors-list { background: rgba(239,68,68,0.1); border: 1px solid var(--red); border-radius: var(--radius); padding: 12px; margin: 12px 0; font-size: 0.82rem; max-height: 200px; overflow-y: auto; }
+  .errors-list div { padding: 2px 0; color: var(--red); }
+
+  /* Archives */
+  .archive-item { display:flex; justify-content:space-between; align-items:center; padding:10px; background:var(--bg3); border-radius:var(--radius); margin-bottom:6px; font-size:0.85rem; }
+
+  /* Toast */
+  .toast { position:fixed; bottom:24px; right:24px; background:var(--green); color:white; padding:12px 20px; border-radius:var(--radius); font-size:0.85rem; z-index:100; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+  .toast.show { opacity:1; }
+
+  /* Stock detail */
+  .stock-detail { font-size:0.78rem; color:var(--text2); margin-top:4px; }
+  .stock-badge { display:inline-block; background:var(--bg3); border:1px solid var(--border); padding:2px 6px; border-radius:4px; margin:2px; font-size:0.72rem; }
+
+  /* Pagination */
+  .pagination { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  .pagination button { min-width:36px; padding:6px 10px; border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:4px; cursor:pointer; font-size:0.8rem; }
+  .pagination button:hover { border-color:var(--accent); }
+  .pagination button.active { background:var(--accent); color:white; border-color:var(--accent); }
+  .pagination button:disabled { opacity:0.4; cursor:not-allowed; }
+  .pagination .page-info { font-size:0.8rem; color:var(--text2); margin:0 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Modification Code Article</h1>
+  <div class="steps">
+    <div class="step-indicator active" onclick="goToStep(1)">1. Import</div>
+    <div class="step-indicator" onclick="goToStep(2)">2. Selection</div>
+    <div class="step-indicator" onclick="goToStep(3)">3. Nouveaux Codes</div>
+    <div class="step-indicator" onclick="goToStep(4)">4. Export</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ==================== ETAPE 1 : IMPORT ==================== -->
+  <div class="section active" id="step1">
+    <div class="card">
+      <h2>Import des fichiers</h2>
+      <div class="upload-grid">
+        <div class="upload-zone" id="zone-articles" onclick="document.getElementById('file-articles').click()">
+          <input type="file" id="file-articles" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event,'articles')">
+          <div class="icon">&#128196;</div>
+          <div class="label">Liste Articles</div>
+          <div class="info">CSV ou Excel - CODEARTICLE, EAN, MARQUE, FAMILLE...</div>
+          <div class="info" id="info-articles"></div>
+          <div class="progress-bar" id="progress-articles" style="display:none"><div class="progress-fill" id="progress-fill-articles"></div></div>
+        </div>
+        <div class="upload-zone" id="zone-stock" onclick="document.getElementById('file-stock').click()">
+          <input type="file" id="file-stock" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event,'stock')">
+          <div class="icon">&#128230;</div>
+          <div class="label">Stock</div>
+          <div class="info">CSV ou Excel - MAGASIN, EAN, QTE_STCK...</div>
+          <div class="info" id="info-stock"></div>
+          <div class="progress-bar" id="progress-stock" style="display:none"><div class="progress-fill" id="progress-fill-stock"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="match-summary" style="display:none">
+      <h2>Resultat du matching</h2>
+      <div class="stats" id="match-stats"></div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="goToStep(2)" id="btn-go-step2" disabled>Selection des produits &rarr;</button>
+      </div>
+    </div>
+
+    <!-- Archives -->
+    <div class="card">
+      <h2>Archives des operations</h2>
+      <div id="archives-list"><span style="color:var(--text2);font-size:0.85rem;">Aucune archive</span></div>
+    </div>
+  </div>
+
+  <!-- ==================== ETAPE 2 : FILTRAGE & SELECTION ==================== -->
+  <div class="section" id="step2">
+    <div class="card">
+      <h2>Filtrage & Selection</h2>
+      <div class="filters-bar" id="filters-bar"></div>
+      <div class="stats">
+        <div class="stat"><strong id="count-filtered">0</strong> articles affiches</div>
+        <div class="stat"><strong id="count-selected">0</strong> selectionnes</div>
+      </div>
+      <div class="btn-group" style="margin-bottom:12px">
+        <button class="btn btn-outline btn-sm" onclick="selectAllFiltered()">Tout selectionner (filtres)</button>
+        <button class="btn btn-outline btn-sm" onclick="deselectAll()">Tout deselectionner</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+      <div class="btn-group">
+        <button class="btn btn-outline" onclick="goToStep(1)">&larr; Retour</button>
+        <button class="btn btn-primary" onclick="goToStep(3)" id="btn-go-step3" disabled>Attribuer les nouveaux codes &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ETAPE 3 : NOUVEAUX CODES ==================== -->
+  <div class="section" id="step3">
+    <div class="card">
+      <div class="warning-box">
+        <div class="title">&#9888; Avant toute chose, supprimer les EAN suivants de CEGID :</div>
+        <div class="ean-list" id="ean-warning-list"></div>
+      </div>
+
+      <h2>Attribution des nouveaux codes articles</h2>
+      <div class="batch-bar">
+        <span style="font-size:0.85rem;white-space:nowrap;">Appliquer a tous :</span>
+        <input type="text" id="batch-code" placeholder="Nouveau code article...">
+        <button class="btn btn-sm btn-primary" onclick="applyBatchCode()">Appliquer</button>
+      </div>
+
+      <div class="code-form" id="code-form"></div>
+
+      <div class="btn-group">
+        <button class="btn btn-outline" onclick="goToStep(2)">&larr; Retour</button>
+        <button class="btn btn-primary" onclick="goToStep(4)" id="btn-go-step4">Generer les fichiers &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ETAPE 4 : EXPORT ==================== -->
+  <div class="section" id="step4">
+    <div class="card">
+      <h2>Validation & Export</h2>
+      <div id="validation-errors"></div>
+      <div class="stats" id="export-stats"></div>
+      <div class="export-grid" id="export-grid"></div>
+      <div class="btn-group" style="margin-top:16px">
+        <button class="btn btn-outline" onclick="goToStep(3)">&larr; Retour</button>
+        <button class="btn btn-success" onclick="downloadAll()">&#128229; Telecharger tout (ZIP)</button>
+        <button class="btn btn-primary" onclick="finishAndArchive()" id="btn-finish" style="margin-left:auto;">Termine &amp; Archiver</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ========================================================================
+// TABLES DE CORRESPONDANCE ERP
+// ========================================================================
+const ERP_CODES = {
+  marque: {
+    "360":"222","msr":"001","kari traa":"002","garmin":"003","therm-a-rest":"004",
+    "sealline":"005","brooks":"006","adidas":"007","odlo":"008","akileine":"009",
+    "teva":"010","freexion":"011","funky trunks":"012","gore":"013","polar":"014",
+    "shapeheart":"015","la sportiva":"016","damart":"017","x-socks":"018",
+    "bv sport":"019","dexshell":"020","asolo":"021","gear aid":"022","baffin":"023",
+    "julbo":"024","leki":"025","nikwax":"026","oxsitis":"027","icebreaker":"028",
+    "merrell":"029","sidas":"030","leatherman":"031","orca":"032","mx3":"033",
+    "compressport":"034","saucony":"035","sea to summit":"036","trekmates":"037",
+    "zamst":"038","salomon":"039","thuasne":"040","keen":"041","zoggs":"042",
+    "nike":"043","overstims":"044","mizuno":"045","patagonia":"046","silva":"047",
+    "sigg":"048","hanwag":"049","zerod":"050","arena":"051","cep":"052",
+    "ferrino":"053","mako":"054","carinthia":"055","ta":"056","lurbel":"057",
+    "compex":"058","speedo":"059","guide du routard":"060","salewa":"061",
+    "meltonic":"062","ecco":"063","oakley":"064","norrona":"065",
+    "klean kanteen":"066","diadora":"067","arva":"068","maurten":"069",
+    "asics":"070","tsl":"071","voyager":"072","on":"073","inov 8":"074",
+    "hoka":"075","tecnica":"076","blueseventy":"077","active leisure":"078",
+    "goal zero":"079","altra":"080","platypus":"081","arcteryx":"082",
+    "veets":"083","gregory":"084","buff":"085","azr":"086","baya":"087",
+    "biolite":"088","careplus":"089","falke":"090","anita":"091","cocoon":"092",
+    "coros":"093","craft":"094","thermos":"095","ergysport":"096","cybex":"097",
+    "exo medical":"098","gerber":"099","nalgene":"100","hyperice":"101",
+    "nic impex":"102","addone":"103","raidlight":"104","meindl":"105",
+    "juyar":"106","lowa":"107","petzl":"108","primus":"109","reebok":"110",
+    "suunto":"111","scott":"112","scarpa":"113","big agnes":"114",
+    "black diamond":"115","puma":"116","deuter":"117","blackroll":"118",
+    "bomolet":"119","lhotse":"120","rflect":"121","care plus":"122",
+    "ciele":"123","clako":"124","vanguard":"125","euroschirm":"126",
+    "way funky":"127","fizan":"128","fjallraven":"129","shokz":"130",
+    "helinox":"131","hydrapak":"132","hydro flask":"133","injinji":"134",
+    "instinct":"135","jetboil":"136","veja":"137","clifbar":"138",
+    "katadyn":"139","nortec":"140","osprey":"141","naak":"142","firepot":"143",
+    "north face":"144","new balance":"145","snowline":"146","source":"147",
+    "stance":"148","swans":"149","therm-ic":"150","tonton outdoor":"151",
+    "travelsafe":"152","verjari":"153","water to go":"154","light my fire":"155",
+    "lifestraw":"156","full windsor":"157","millet":"158","picture":"159",
+    "2xu":"160","nnormal":"161","nemo":"162","optimus":"163","baouw":"164",
+    "paos":"165","powertec":"166","rab":"167","revvi":"168","mugiro":"169",
+    "reboots":"170","yuj":"171","sol":"172","saxx":"173","trek n eat":"174",
+    "wahoo":"175","divers":"176","couleur tong":"177","unchain":"178",
+    "stimcare":"179","ancienne ref":"180","clif":"181","rossignol":"182",
+    "stimium":"183","baume du tigre":"184","erima":"185","columbia":"186",
+    "vertical":"187","packtowl":"188","punch power":"189","o2d":"190",
+    "r3 sport":"191","apurna":"192","tremblay":"193","peak performance":"194",
+    "sodilog":"195","skins":"196","fitletic":"197","tingerlaat":"198",
+    "micropur":"199","sobhi sport":"200","waa":"201","xtenex":"202",
+    "moving comfort":"203","stanley":"204","chronopost":"205","tomtom":"206",
+    "ledlenser":"207","wantalis":"208","noene":"209","the north face":"210",
+    "urikan":"211","mpowerd":"212","samsonite":"213","chin mudra":"214",
+    "active patch":"215","flipbelt":"216","fitbit":"217","pharmavoyage":"218",
+    "swiss advance":"219","colissimo":"220","fjall raven":"221","blazepod":"223",
+    "goalzero":"224","travel safe":"225","seventy one":"226","tatonka":"227",
+    "sigvaris":"228","ctr":"229","colmar":"230","montura":"231","smoon":"232",
+    "forestia":"236","wild west":"237","humangear":"238","uyn":"436",
+    "ortlieb":"437","ecoflow":"438","hacknite":"439","ign":"440","norda":"441",
+    "gu":"442","beal":"443","hannah":"444","rafiki":"445","loubsol":"446",
+    "victorinox":"447","nst":"448","bacterless":"449","quicksilver":"450",
+    "roxy":"451","element":"452","guidetti":"453","real":"454",
+    "quiksilver":"455","recto verso":"456","hastko":"457","aigle":"458",
+    "bauerfeind":"459","freshflow":"460","moonlight":"461","therabody":"462",
+    "tag heuer":"463","361\u00b0":"464","garmont":"465","dynafit":"466","nomio":"467"
+  },
+  famille: {
+    "accessoire":"001","divers":"002","technologie":"003","materiel":"004",
+    "bagagerie":"005","chaussure":"006","textile":"007","nutrition":"008",
+    "librairie":"009","cheque cadeau":"011","menstruelle":"013","alcool":"020"
+  },
+  sfamille: {
+    "cuisine":"001","divers":"002","montre":"003","popote":"004","rechaud":"005",
+    "tente":"006","entretien et reparation":"007","hygiene et soins":"008",
+    "sac etanche":"009","running":"010","rain cover":"011","tapis de sol":"012",
+    "sac de couchage":"013","haut":"014","sacoche":"015","matelas":"016",
+    "bivouac":"017","sandale":"018","chaussure tige haute":"019","short":"020",
+    "bonnet":"021","chaussette":"022","randonnee":"023","lunette de soleil":"024",
+    "baton":"025","embout":"026","casquette":"027","sous-couche":"028",
+    "pochette":"029","t-shirt":"030","coutellerie":"031","combinaison":"032",
+    "lyophilise":"033","trail":"034","guetre":"035","orthese":"036",
+    "brassiere":"037","lunette de natation":"038","gourde":"039",
+    "recuperation":"040","boisson":"041","gant":"042","maillot de bain":"043",
+    "bonnet de bain":"044","triathlon":"045","sac a dos 31-45":"046",
+    "sac a dos":"047","natation":"048","plaquette":"049","palme":"050",
+    "manchon":"051","pantalon":"052","bandeau":"053","t-shirt mc":"054",
+    "gps":"055","cable":"056","bracelet":"057","ceinture cardio":"058",
+    "guide":"059","sac a dos 10-30":"060","pull buoy":"061",
+    "ceinture hydratation":"062","gel":"063","porte dossard":"064",
+    "safety buoy":"065","neoprene":"066","running/trail":"067","carbone":"068",
+    "veste":"069","cuissard":"070","securite":"071","collant":"072",
+    "debardeur":"073","veste softshell":"074","bas":"075",
+    "sac hydratation":"076","piste":"077","xcs":"078","bagagerie":"079",
+    "panneau solaire":"080","manchette":"081","filtre":"082","tour de cou":"083",
+    "fitness":"084","barre":"085","poche a eau":"086","sac a dos 60+":"087",
+    "sous-vetement":"088","t-shirt ml":"089","serviette":"090","duffel":"091",
+    "poussette":"092","aliment":"093","veste hardshell":"094",
+    "hydratation":"095","chaussure tige basse":"096","escalade":"097",
+    "chaussure tige mid":"098","trifonction":"099","doudoune":"100",
+    "polaire":"101","planche":"102","outdoor":"103","sweat":"105",
+    "seconde-couche":"106","jupe":"107","sac a dos 46-60":"108","poncho":"109",
+    "alpinisme":"110","casque":"111","harnais":"112","lifestyle":"113",
+    "lampe":"114","oreiller":"115","drap de sac":"116","visiere":"117",
+    "flask":"118","bob":"119","chaise":"120","par-soleil":"121","gobelet":"122",
+    "coiffe":"123","frontale":"124","carquois":"125","gaz":"126","masque":"127",
+    "hamac":"128","gantelet":"129","lacet":"130","swimrun":"131",
+    "couverture de survie":"132","sac de compression":"133","chapeau":"134",
+    "parapluie":"136","lit de camp":"137","table":"138","attache":"139",
+    "moustiquaire":"140","velo":"141","semelle":"142","boussole":"143",
+    "gateau":"144","crampon":"145","couvert":"146","puree":"147",
+    "raquette":"148","batterie":"149","crossfit":"151","jumelle":"152",
+    "gomme":"153","home trainer":"154","tapis de yoga":"155","banane":"156",
+    "electrode":"157","voyage":"159","robe":"160","sac":"162",
+    "recharge electrique":"163","ski":"166","hiver":"167","sac de voyage":"168",
+    "ceinture":"170","chemise":"171","pochette etanche":"173","livre":"174",
+    "cadenas":"175","bouchon oreille":"176","pince nez":"177","corde":"178",
+    "porte-bebe":"180","tarp":"182","dva":"193","mousqueton":"208","creme":"209",
+    "pates a tartiner":"212","complement alimentaire":"213",
+    "pack nutrition":"214","carte":"215","pastille purifiante":"216",
+    "audio":"218","savon":"219","lampe torche":"220","rouleau de massage":"221",
+    "conduction osseuse":"222","brassard cardio":"223","sangle":"224",
+    "boisson avant l'effort":"225","boisson pendant l'effort":"226",
+    "boisson de recuparation":"227","lingette":"228","secours":"229",
+    "soupe lyophilisee":"231","repas sterilise":"232","protection solaire":"233",
+    "sac hydration >20l":"234","crash pad":"235","sac hydration 6-10l":"236",
+    "sac hydration <6l":"237","pate de fruit":"238","lotion":"239",
+    "magnesie":"240","sac isotherme":"241","dessert sterilise":"242",
+    "reflechissant":"243","brique":"244","dessert lyophilise":"245",
+    "petit-dejeuner lyophilise":"246","trousse de toilette":"247",
+    "spray parfume":"249","allume-feu":"250","balance":"251","cagoule":"252",
+    "surf":"253","yoga":"254","sport d'hiver":"255","lampe ventrale":"256",
+    "couchage":"257","botte":"258","respiration":"259"
+  },
+  genre: {
+    "mixte":"001","homme":"002","femme":"003","enfant":"004"
+  },
+  collection: {
+    "a23":"001","fw17":"002","a24":"003","fw24":"004","fw16":"005",
+    "ss23":"006","ss18":"007","a16":"008","ss17":"009","a19":"010",
+    "fw18":"011","fw15":"012","permanent":"013","ss19":"014","a18":"015",
+    "fw23":"016","ss24":"017","fw21":"018","fw20":"019","ss21":"020",
+    "ss20":"021","ss15":"022","ss16":"023","a20":"024","a22":"025",
+    "fw22":"026","ss22":"027","a21":"028","fw19":"029","fw11":"030",
+    "fw13":"031","ss14":"032","ss12":"033","a17":"034","ss13":"035",
+    "fw14":"036","fw12":"037","ss25":"039","a25":"042","fw25":"044",
+    "ss26":"045","a26":"046"
+  },
+  theme: {
+    "outdoor":"001","running":"002","fitness":"003","natation":"004",
+    "triathlon":"005","athletisme":"006","yoga":"007","escalade":"008",
+    "velo":"009","lifestyle":"010","sport d'hiver":"011","autre":"013",
+    "surf":"014","frais de livraison":"015","swimrun":"024","alpinisme":"025"
+  },
+  tva: {
+    "alcool":"ALC","exonere":"EXO","librairie":"LIV","location":"LOC",
+    "menstruelle":"MEN","nutrition":"NUT","prestation":"PRE"
+  }
+};
+
+// ========================================================================
+// FONCTIONS ERP
+// ========================================================================
+function erpCode(table, value) {
+  if (!value) return '';
+  const k = value.toLowerCase().trim();
+  return ERP_CODES[table][k] || '';
+}
+
+function erpTva(famille) {
+  if (!famille) return 'NOR';
+  const k = famille.toLowerCase().trim();
+  return ERP_CODES.tva[k] || 'NOR';
+}
+
+// ========================================================================
+// STATE
+// ========================================================================
+let articlesData = [];    // liste articles brute
+let stockData = [];       // stock brut (multi-lignes par EAN)
+let mergedData = [];      // articles enrichis avec stock
+let filteredData = [];    // apres filtrage
+let selectedEans = new Set();
+let newCodes = {};        // { ean: newCode }
+let stockByEan = {};      // { ean: [{magasin, qte, ...}] }
+let currentStep = 1;
+let generatedFiles = {};  // { filename: content }
+let currentPage = 0;
+const PAGE_SIZE = 100;
+let filterDebounce = null;
+
+// ========================================================================
+// FILE UPLOAD & PARSING
+// ========================================================================
+
+// Parser CSV natif — gros volumes, gere ; \t , et champs quotes avec ; ou newlines dedans
+function parseCSVNative(text) {
+  // Strip BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+
+  console.log('[CSV] Taille du texte brut:', text.length, 'caracteres');
+
+  // Detect separator from header line (before first newline, outside quotes)
+  let headerEnd = 0;
+  while (headerEnd < text.length && text[headerEnd] !== '\n' && text[headerEnd] !== '\r') headerEnd++;
+  const firstLine = text.substring(0, headerEnd);
+  let sep = ';';
+  const tabCount = firstLine.split('\t').length;
+  const semiCount = firstLine.split(';').length;
+  const commaCount = firstLine.split(',').length;
+  if (tabCount > semiCount && tabCount > commaCount) sep = '\t';
+  else if (semiCount <= 1 && commaCount > 1) sep = ',';
+
+  console.log('[CSV] Separateur detecte:', JSON.stringify(sep), '(tab:', tabCount, 'semi:', semiCount, 'comma:', commaCount, ')');
+  console.log('[CSV] Header:', firstLine.substring(0, 200));
+
+  // Determine expected column count from header
+  const headerFields = firstLine.split(sep).map(h => h.trim().toUpperCase());
+  const expectedCols = headerFields.length;
+  console.log('[CSV] Colonnes attendues:', expectedCols, headerFields);
+
+  // Count raw newlines for reference
+  let rawNewlines = 0;
+  for (let k = 0; k < text.length; k++) { if (text[k] === '\n') rawNewlines++; }
+  console.log('[CSV] Nombre de \\n dans le fichier:', rawNewlines);
+
+  // Split brut sur \n (donnees ERP = jamais de newline dans un champ)
+  // Beaucoup plus fiable que le tracking de quotes pour les fins de ligne
+  const lines = text.substring(headerEnd).split('\n');
+  console.log('[CSV] Lignes apres split:', lines.length);
+
+  const rows = [];
+  let skippedEmpty = 0;
+  let skippedMalformed = 0;
+
+  for (let li = 0; li < lines.length; li++) {
+    let line = lines[li];
+    // Strip \r
+    if (line.length > 0 && line[line.length - 1] === '\r') line = line.substring(0, line.length - 1);
+    if (line.length === 0) { skippedEmpty++; continue; }
+
+    // Split simple sur le separateur (pas de champs quotes multi-lignes en ERP)
+    const fields = line.split(sep);
+
+    if (fields.length >= expectedCols) {
+      const obj = {};
+      for (let c = 0; c < expectedCols; c++) {
+        // Strip surrounding quotes if present
+        let val = fields[c];
+        if (val.length >= 2 && val[0] === '"' && val[val.length - 1] === '"') {
+          val = val.substring(1, val.length - 1).replace(/""/g, '"');
+        }
+        obj[headerFields[c]] = val.trim();
+      }
+      rows.push(obj);
+      if (fields.length > expectedCols && skippedMalformed < 5) {
+        console.log('[CSV] Ligne extra cols (attendu', expectedCols, 'recu', fields.length, ') ligne', li + 1, ':', line.substring(0, 150));
+      }
+      if (fields.length > expectedCols) skippedMalformed++;
+    } else if (fields.length > 1) {
+      const obj = {};
+      for (let c = 0; c < expectedCols; c++) {
+        obj[headerFields[c]] = (fields[c] || '').trim();
+      }
+      rows.push(obj);
+      skippedMalformed++;
+    } else {
+      skippedEmpty++;
+    }
+  }
+
+  console.log('[CSV] === RESULTAT ===');
+  console.log('[CSV] Lignes parsees OK:', rows.length);
+  console.log('[CSV] Lignes vides ignorees:', skippedEmpty);
+  console.log('[CSV] Lignes col mismatch (gardees):', skippedMalformed);
+  console.log('[CSV] Total traite:', rows.length + skippedEmpty);
+  console.log('[CSV] Attendu (newlines):', rawNewlines);
+  console.log('[CSV] Difference:', rawNewlines - rows.length - skippedEmpty);
+  if (rows.length > 0) {
+    console.log('[CSV] Premiere ligne:', JSON.stringify(rows[0]));
+    console.log('[CSV] Derniere ligne:', JSON.stringify(rows[rows.length - 1]));
+  }
+
+  return rows;
+}
+
+// Parse a single CSV line into fields, handling quoted fields with separators inside
+function parseCSVLine(line, sep) {
+  const fields = [];
+  const len = line.length;
+  let i = 0;
+
+  while (i <= len) {
+    if (i === len) {
+      fields.push('');
+      break;
+    }
+    if (line[i] === '"') {
+      // Quoted field
+      i++; // skip opening "
+      let val = '';
+      while (i < len) {
+        if (line[i] === '"') {
+          if (i + 1 < len && line[i + 1] === '"') {
+            val += '"';
+            i += 2;
+          } else {
+            i++; // skip closing "
+            break;
+          }
+        } else {
+          val += line[i];
+          i++;
+        }
+      }
+      fields.push(val);
+      // Skip separator after closing quote
+      if (i < len && line[i] === sep) i++;
+    } else {
+      // Unquoted field
+      let start = i;
+      while (i < len && line[i] !== sep) i++;
+      fields.push(line.substring(start, i));
+      if (i < len) i++; // skip separator
+    }
+  }
+  return fields;
+}
+
+function handleFileUpload(event, type) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const progressBar = document.getElementById('progress-' + type);
+  const progressFill = document.getElementById('progress-fill-' + type);
+  const infoEl = document.getElementById('info-' + type);
+
+  progressBar.style.display = 'block';
+  progressFill.style.width = '0%';
+  infoEl.textContent = 'Chargement du fichier...';
+
+  const isExcel = /\.xlsx?$/i.test(file.name);
+
+  if (isExcel) {
+    // Excel: use SheetJS with ArrayBuffer
+    const reader = new FileReader();
+    reader.onprogress = function(e) {
+      if (e.lengthComputable) {
+        progressFill.style.width = Math.round((e.loaded / e.total) * 60) + '%';
+        infoEl.textContent = 'Lecture : ' + Math.round(e.loaded / 1024) + ' Ko / ' + Math.round(e.total / 1024) + ' Ko';
+      }
+    };
+    reader.onload = function(e) {
+      progressFill.style.width = '70%';
+      infoEl.textContent = 'Analyse Excel...';
+      setTimeout(function() {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', raw: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        progressFill.style.width = '85%';
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        const normalized = json.map(row => {
+          const obj = {};
+          Object.keys(row).forEach(k => { obj[k.trim().toUpperCase()] = String(row[k]).trim(); });
+          return obj;
+        });
+        progressFill.style.width = '100%';
+        finishUpload(type, normalized, infoEl);
+      }, 50);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // CSV: parser natif, lecture en texte (plus fiable + plus rapide)
+    const reader = new FileReader();
+    reader.onprogress = function(e) {
+      if (e.lengthComputable) {
+        progressFill.style.width = Math.round((e.loaded / e.total) * 60) + '%';
+        infoEl.textContent = 'Lecture : ' + Math.round(e.loaded / (1024*1024)) + ' Mo / ' + Math.round(e.total / (1024*1024)) + ' Mo';
+      }
+    };
+    reader.onload = function(e) {
+      progressFill.style.width = '65%';
+      infoEl.textContent = 'Analyse CSV...';
+      setTimeout(function() {
+        const text = e.target.result;
+        progressFill.style.width = '75%';
+        const normalized = parseCSVNative(text);
+        progressFill.style.width = '100%';
+        finishUpload(type, normalized, infoEl);
+      }, 50);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+}
+
+function finishUpload(type, normalized, infoEl) {
+  if (type === 'articles') {
+    articlesData = normalized;
+    document.getElementById('zone-articles').classList.add('loaded');
+    infoEl.textContent = articlesData.length.toLocaleString('fr-FR') + ' articles charges';
+  } else {
+    stockData = normalized;
+    document.getElementById('zone-stock').classList.add('loaded');
+    infoEl.textContent = stockData.length.toLocaleString('fr-FR') + ' lignes de stock chargees';
+  }
+  if (articlesData.length > 0 && stockData.length > 0) {
+    performMatch();
+  }
+}
+
+// Drag & drop
+['zone-articles','zone-stock'].forEach(id => {
+  const zone = document.getElementById(id);
+  const type = id === 'zone-articles' ? 'articles' : 'stock';
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const input = zone.querySelector('input[type=file]');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
+  });
+});
+
+// ========================================================================
+// MATCHING
+// ========================================================================
+function performMatch() {
+  // Build stock index by EAN
+  stockByEan = {};
+  stockData.forEach(row => {
+    const ean = String(row.EAN || '').trim();
+    if (!ean) return;
+    if (!stockByEan[ean]) stockByEan[ean] = [];
+    stockByEan[ean].push({
+      magasin: row.MAGASIN || '',
+      qte_stck: parseInt(row.QTE_STCK) || 0,
+      qte_rsrv: parseInt(row.QTE_RSRV) || 0,
+      pa: row.PA || '',
+      pv: row.PV || ''
+    });
+  });
+
+  // Merge articles with stock info
+  let matched = 0, noStock = 0;
+  mergedData = articlesData.map(art => {
+    const ean = String(art.EAN || '').trim();
+    const stock = stockByEan[ean] || [];
+    const totalQte = stock.reduce((s, r) => s + r.qte_stck, 0);
+    if (stock.length > 0) matched++; else noStock++;
+    return {
+      code: art.CODEARTICLE || '',
+      desig: art.DESIGNATION || '',
+      couleur: art.COULEUR || '',
+      taille: art.TAILLE || '',
+      ean: ean,
+      fournisseur: art.FOURNISSEUR || '',
+      marq: art.MARQUE || '',
+      fam: art.FAMILLE || '',
+      sfam: art.SOUSFAMILLE || '',
+      genre: art.GENRE || '',
+      theme: art.THEME || '',
+      col: art.COLLECTION || '',
+      pa: art.PA || '',
+      pv: art.PV || '',
+      matiere: art.MATIERE || '',
+      poid: art.POID || '',
+      origine: art.ORIGINE || '',
+      rfid: art.RFID || '',
+      stock: stock,
+      totalQte: totalQte
+    };
+  });
+
+  // Show summary
+  const summary = document.getElementById('match-summary');
+  summary.style.display = 'block';
+  document.getElementById('match-stats').innerHTML =
+    '<div class="stat"><strong>' + mergedData.length + '</strong> articles total</div>' +
+    '<div class="stat"><strong>' + matched + '</strong> avec stock</div>' +
+    '<div class="stat"><strong>' + noStock + '</strong> sans stock</div>';
+  document.getElementById('btn-go-step2').disabled = false;
+
+  showToast('Matching termine : ' + matched + ' articles avec stock');
+  saveSession();
+}
+
+// ========================================================================
+// STEP NAVIGATION
+// ========================================================================
+function goToStep(step) {
+  if (step === 2 && mergedData.length === 0) return;
+  if (step === 3 && selectedEans.size === 0) return;
+
+  currentStep = step;
+  saveSession();
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + step).classList.add('active');
+
+  document.querySelectorAll('.step-indicator').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i + 1 === step) el.classList.add('active');
+    else if (i + 1 < step) el.classList.add('done');
+  });
+
+  if (step === 2) buildTable();
+  if (step === 3) buildCodeForm();
+  if (step === 4) generateFiles();
+}
+
+// ========================================================================
+// ETAPE 2 : TABLE & FILTRES (pagination pour gros volumes)
+// ========================================================================
+const DISPLAY_COLS = ['code','desig','couleur','taille','ean','fournisseur','fam','sfam','genre','theme','col'];
+const DISPLAY_LABELS = {
+  code:'Code Article', desig:'Designation', couleur:'Couleur', taille:'Taille',
+  ean:'EAN', fournisseur:'Fournisseur', fam:'Famille', sfam:'Sous-famille',
+  genre:'Genre', theme:'Theme', col:'Collection'
+};
+const FILTER_COLS = ['code','desig','couleur','taille','ean','fournisseur','fam','sfam','genre','theme','col'];
+
+let activeFilters = {};
+
+function buildTable() {
+  buildFilters();
+  currentPage = 0;
+  applyFilters();
+}
+
+function buildFilters() {
+  const bar = document.getElementById('filters-bar');
+  bar.innerHTML = '';
+
+  // All filters are text inputs (dropdowns unusable with 500k rows)
+  FILTER_COLS.forEach(col => {
+    const grp = document.createElement('div');
+    grp.className = 'filter-group';
+    grp.innerHTML = '<label>' + DISPLAY_LABELS[col] + '</label>' +
+      '<input type="text" placeholder="Filtrer..." data-col="' + col + '">';
+    grp.querySelector('input').addEventListener('input', function() {
+      const val = this.value.toLowerCase().trim();
+      activeFilters[col] = val;
+      // Debounce to avoid lag on each keystroke with large data
+      clearTimeout(filterDebounce);
+      filterDebounce = setTimeout(function() {
+        currentPage = 0;
+        applyFilters();
+      }, 300);
+    });
+    bar.appendChild(grp);
+  });
+}
+
+function applyFilters() {
+  // Check if any filter is active
+  const hasFilters = FILTER_COLS.some(col => activeFilters[col]);
+
+  if (!hasFilters) {
+    filteredData = mergedData;
+  } else {
+    filteredData = mergedData.filter(row => {
+      for (const col of FILTER_COLS) {
+        const f = activeFilters[col];
+        if (!f) continue;
+        const val = (row[col] || '').toLowerCase();
+        if (!val.includes(f)) return false;
+      }
+      return true;
+    });
+  }
+
+  document.getElementById('count-filtered').textContent = filteredData.length.toLocaleString('fr-FR');
+  updateSelectedCount();
+  renderPage();
+}
+
+function renderPage() {
+  const thead = document.getElementById('table-head');
+  const tbody = document.getElementById('table-body');
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  if (currentPage < 0) currentPage = 0;
+
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredData.length);
+  const pageData = filteredData.slice(start, end);
+
+  thead.innerHTML = '<tr><th><input type="checkbox" id="select-all-cb" onchange="toggleSelectPage(this.checked)"></th>' +
+    DISPLAY_COLS.map(c => '<th>' + DISPLAY_LABELS[c] + '</th>').join('') +
+    '<th>Stock</th></tr>';
+
+  const html = [];
+  for (let i = 0; i < pageData.length; i++) {
+    const row = pageData[i];
+    const checked = selectedEans.has(row.ean) ? 'checked' : '';
+    const selClass = selectedEans.has(row.ean) ? 'selected' : '';
+    const stockSum = row.totalQte;
+    const stockTip = row.stock.map(s => s.magasin + ':' + s.qte_stck).join(' ');
+    html.push('<tr class="' + selClass + '">' +
+      '<td><input type="checkbox" ' + checked + ' onchange="toggleSelect(\'' + row.ean + '\', this.checked)"></td>' +
+      DISPLAY_COLS.map(c => '<td>' + escHtml(row[c]) + '</td>').join('') +
+      '<td title="' + escHtml(stockTip) + '">' + stockSum + '</td></tr>');
+  }
+  tbody.innerHTML = html.join('');
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const pag = document.getElementById('pagination');
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  let html = '<button ' + (currentPage === 0 ? 'disabled' : '') + ' onclick="goPage(0)">&laquo;</button>';
+  html += '<button ' + (currentPage === 0 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage - 1) + ')">&lsaquo;</button>';
+
+  // Show max 7 page buttons around current
+  let pStart = Math.max(0, currentPage - 3);
+  let pEnd = Math.min(totalPages - 1, currentPage + 3);
+  if (pStart > 0) html += '<button disabled>...</button>';
+  for (let p = pStart; p <= pEnd; p++) {
+    html += '<button class="' + (p === currentPage ? 'active' : '') + '" onclick="goPage(' + p + ')">' + (p + 1) + '</button>';
+  }
+  if (pEnd < totalPages - 1) html += '<button disabled>...</button>';
+
+  html += '<button ' + (currentPage >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage + 1) + ')">&rsaquo;</button>';
+  html += '<button ' + (currentPage >= totalPages - 1 ? 'disabled' : '') + ' onclick="goPage(' + (totalPages - 1) + ')">&raquo;</button>';
+  html += '<span class="page-info">' + (currentPage * PAGE_SIZE + 1).toLocaleString('fr-FR') + '-' + Math.min((currentPage + 1) * PAGE_SIZE, filteredData.length).toLocaleString('fr-FR') + ' / ' + filteredData.length.toLocaleString('fr-FR') + '</span>';
+
+  pag.innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderPage();
+  // Scroll table to top
+  document.querySelector('.table-wrap').scrollTop = 0;
+}
+
+function toggleSelect(ean, checked) {
+  if (checked) selectedEans.add(ean); else selectedEans.delete(ean);
+  updateSelectedCount();
+  // Update row visual without full re-render
+  document.querySelectorAll('#table-body tr').forEach(tr => {
+    const cb = tr.querySelector('input[type=checkbox]');
+    if (cb && cb.value !== undefined) {
+      // Find by matching
+    }
+  });
+}
+
+function toggleSelectPage(checked) {
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredData.length);
+  for (let i = start; i < end; i++) {
+    if (checked) selectedEans.add(filteredData[i].ean);
+    else selectedEans.delete(filteredData[i].ean);
+  }
+  renderPage();
+  updateSelectedCount();
+}
+
+function selectAllFiltered() {
+  for (let i = 0; i < filteredData.length; i++) {
+    selectedEans.add(filteredData[i].ean);
+  }
+  renderPage();
+  updateSelectedCount();
+  showToast(filteredData.length.toLocaleString('fr-FR') + ' articles selectionnes');
+  saveSession();
+}
+
+function deselectAll() {
+  selectedEans.clear();
+  renderPage();
+  updateSelectedCount();
+  saveSession();
+}
+
+function updateSelectedCount() {
+  document.getElementById('count-selected').textContent = selectedEans.size.toLocaleString('fr-FR');
+  document.getElementById('btn-go-step3').disabled = selectedEans.size === 0;
+}
+
+// ========================================================================
+// ETAPE 3 : NOUVEAUX CODES
+// ========================================================================
+function buildCodeForm() {
+  const eanList = document.getElementById('ean-warning-list');
+  eanList.textContent = [...selectedEans].join(', ');
+
+  const form = document.getElementById('code-form');
+  form.innerHTML = '';
+
+  const selectedRows = mergedData.filter(r => selectedEans.has(r.ean));
+  selectedRows.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'code-row';
+    div.innerHTML =
+      '<span class="ean-val">' + row.ean + '</span>' +
+      '<span>' + escHtml(row.desig) + ' | ' + escHtml(row.couleur) + ' | ' + escHtml(row.taille) + '</span>' +
+      '<span class="old-code">Ancien : ' + escHtml(row.code) + '</span>' +
+      '<input type="text" value="' + escHtml(newCodes[row.ean] || '') + '" placeholder="Nouveau code..." data-ean="' + row.ean + '" onchange="setNewCode(\'' + row.ean + '\', this.value)">';
+    form.appendChild(div);
+  });
+}
+
+function setNewCode(ean, code) {
+  newCodes[ean] = code.trim();
+  saveSession();
+}
+
+function applyBatchCode() {
+  const code = document.getElementById('batch-code').value.trim();
+  if (!code) return;
+  selectedEans.forEach(ean => { newCodes[ean] = code; });
+  buildCodeForm();
+  showToast('Code "' + code + '" applique a ' + selectedEans.size + ' EAN(s)');
+  saveSession();
+}
+
+// ========================================================================
+// ETAPE 4 : GENERATION DES FICHIERS
+// ========================================================================
+function generateFiles() {
+  generatedFiles = {};
+  const selectedRows = mergedData.filter(r => selectedEans.has(r.ean));
+  const date = new Date();
+  const dateStr = date.getFullYear() +
+    String(date.getMonth()+1).padStart(2,'0') +
+    String(date.getDate()).padStart(2,'0');
+
+  // Validate new codes
+  const missingCodes = selectedRows.filter(r => !newCodes[r.ean]);
+  if (missingCodes.length > 0) {
+    showToast('Attention : ' + missingCodes.length + ' EAN(s) sans nouveau code');
+  }
+
+  // --- A. Matrice encodee ERP ---
+  const errors = validateErpCodes(selectedRows);
+  if (errors.length > 0) {
+    const errDiv = document.getElementById('validation-errors');
+    errDiv.innerHTML = '<div class="errors-list">' + errors.map(e => '<div>' + escHtml(e) + '</div>').join('') + '</div>';
+  } else {
+    document.getElementById('validation-errors').innerHTML = '';
+  }
+
+  const matrice = buildEncodedCSV(selectedRows);
+  generatedFiles['matrice_import_' + dateStr + '.csv'] = matrice;
+
+  // --- B & C. Fichiers sortie/entree par magasin ---
+  const stockMoves = {};  // { magasin: [{ean, qte}] }
+  selectedRows.forEach(row => {
+    const stocks = stockByEan[row.ean] || [];
+    stocks.forEach(s => {
+      if (s.qte_stck <= 0) return;
+      if (!stockMoves[s.magasin]) stockMoves[s.magasin] = [];
+      stockMoves[s.magasin].push({ ean: row.ean, qte: s.qte_stck });
+    });
+  });
+
+  const SEP = ';';
+  Object.keys(stockMoves).sort().forEach(mag => {
+    const lines = stockMoves[mag];
+    // Sortie
+    const sortieHeader = 'INVC1_' + SEP + 'EAN' + SEP + 'Magasin' + SEP + 'Qte';
+    const sortieRows = lines.map(l => 'INVC1_' + SEP + l.ean + SEP + mag + SEP + l.qte);
+    const sortieContent = '\uFEFF' + [sortieHeader, ...sortieRows].join('\r\n');
+    generatedFiles['sortie_' + mag + '_' + dateStr + '.csv'] = sortieContent;
+
+    // Entree (meme contenu)
+    const entreeHeader = 'INVC1_' + SEP + 'EAN' + SEP + 'Magasin' + SEP + 'Qte';
+    const entreeRows = lines.map(l => 'INVC1_' + SEP + l.ean + SEP + mag + SEP + l.qte);
+    const entreeContent = '\uFEFF' + [entreeHeader, ...entreeRows].join('\r\n');
+    generatedFiles['entree_' + mag + '_' + dateStr + '.csv'] = entreeContent;
+  });
+
+  // Render export UI
+  renderExportUI(selectedRows, stockMoves, dateStr);
+}
+
+function buildEncodedCSV(rows) {
+  const SEP = ';';
+  const headers = ['0','1','2','3','4','FN1_code','5','FN2_code','6','FN3_code',
+                    '7','FN4_code','8','FN5_code','9','FN6_code','10','11','12',
+                    '13','14','15','16','17','18','19','20','taxe'];
+
+  const dataRows = rows.map(r => {
+    const code = newCodes[r.ean] || r.code;
+    return [
+      'ARTC1_',
+      r.marq || '',
+      code,
+      r.desig || '',
+      r.ean || '',
+      erpCode('marque', r.marq),
+      r.marq || '',
+      erpCode('famille', r.fam),
+      r.fam || '',
+      erpCode('sfamille', r.sfam),
+      r.sfam || '',
+      erpCode('genre', r.genre),
+      r.genre || '',
+      erpCode('theme', r.theme),
+      r.theme || '',
+      erpCode('collection', r.col),
+      r.col || '',
+      '0',
+      '0',
+      '',
+      r.taille || '',
+      r.couleur || '.',
+      'VIDE',
+      'VIDE',
+      (r.pa || '').replace('.', ','),
+      (r.pv || '').replace('.', ','),
+      r.fam && r.fam.toLowerCase() === 'nutrition' ? '-' : 'X',
+      erpTva(r.fam)
+    ];
+  });
+
+  function csvField(val) {
+    const s = String(val);
+    if (s.indexOf(SEP) >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0)
+      return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  const lines = [headers.join(SEP)];
+  dataRows.forEach(row => lines.push(row.map(csvField).join(SEP)));
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function validateErpCodes(rows) {
+  const errors = [];
+  rows.forEach((r, i) => {
+    const line = i + 1;
+    if (!newCodes[r.ean]) errors.push('Ligne ' + line + ': EAN "' + r.ean + '" - nouveau code article manquant');
+    if (r.marq && !erpCode('marque', r.marq)) errors.push('Ligne ' + line + ': Marque "' + r.marq + '" non trouvee dans la table ERP');
+    if (r.fam && !erpCode('famille', r.fam)) errors.push('Ligne ' + line + ': Famille "' + r.fam + '" non trouvee');
+    if (r.sfam && !erpCode('sfamille', r.sfam)) errors.push('Ligne ' + line + ': Sous-famille "' + r.sfam + '" non trouvee');
+    if (r.genre && !erpCode('genre', r.genre)) errors.push('Ligne ' + line + ': Genre "' + r.genre + '" non trouve');
+    if (r.theme && !erpCode('theme', r.theme)) errors.push('Ligne ' + line + ': Theme "' + r.theme + '" non trouve');
+    if (r.col && !erpCode('collection', r.col)) errors.push('Ligne ' + line + ': Collection "' + r.col + '" non trouvee');
+  });
+  return errors;
+}
+
+function renderExportUI(selectedRows, stockMoves, dateStr) {
+  const stats = document.getElementById('export-stats');
+  const magasins = Object.keys(stockMoves);
+  stats.innerHTML =
+    '<div class="stat"><strong>' + selectedRows.length + '</strong> EAN(s) modifies</div>' +
+    '<div class="stat"><strong>' + magasins.length + '</strong> magasin(s) concernes</div>' +
+    '<div class="stat"><strong>' + Object.keys(generatedFiles).length + '</strong> fichier(s) generes</div>';
+
+  const grid = document.getElementById('export-grid');
+  grid.innerHTML = '';
+
+  // Matrice card
+  const mCard = document.createElement('div');
+  mCard.className = 'export-card';
+  mCard.innerHTML = '<h4>Matrice Import ERP</h4>' +
+    '<div class="file-list">matrice_import_' + dateStr + '.csv</div>' +
+    '<div class="file-list">' + selectedRows.length + ' ligne(s), 28 colonnes</div>' +
+    '<button class="btn btn-sm btn-primary" onclick="downloadFile(\'matrice_import_' + dateStr + '.csv\')">Telecharger</button>';
+  grid.appendChild(mCard);
+
+  // Sortie cards
+  if (magasins.length > 0) {
+    const sCard = document.createElement('div');
+    sCard.className = 'export-card';
+    const sFiles = magasins.map(m => 'sortie_' + m + '_' + dateStr + '.csv').join('<br>');
+    sCard.innerHTML = '<h4>Sorties Exceptionnelles</h4>' +
+      '<div class="file-list">' + sFiles + '</div>' +
+      '<button class="btn btn-sm btn-danger" onclick="downloadGroup(\'sortie\',\'' + dateStr + '\')">Telecharger toutes les sorties</button>';
+    grid.appendChild(sCard);
+
+    const eCard = document.createElement('div');
+    eCard.className = 'export-card';
+    const eFiles = magasins.map(m => 'entree_' + m + '_' + dateStr + '.csv').join('<br>');
+    eCard.innerHTML = '<h4>Entrees Exceptionnelles</h4>' +
+      '<div class="file-list">' + eFiles + '</div>' +
+      '<button class="btn btn-sm btn-success" onclick="downloadGroup(\'entree\',\'' + dateStr + '\')">Telecharger toutes les entrees</button>';
+    grid.appendChild(eCard);
+  }
+}
+
+// ========================================================================
+// DOWNLOAD
+// ========================================================================
+function downloadFile(name) {
+  const content = generatedFiles[name];
+  if (!content) return;
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  saveAs(blob, name);
+}
+
+function downloadGroup(prefix, dateStr) {
+  Object.keys(generatedFiles).filter(k => k.startsWith(prefix + '_')).forEach(name => {
+    downloadFile(name);
+  });
+}
+
+function downloadAll() {
+  const zip = new JSZip();
+  Object.keys(generatedFiles).forEach(name => {
+    zip.file(name, generatedFiles[name]);
+  });
+  zip.generateAsync({ type: 'blob' }).then(blob => {
+    const date = new Date();
+    const dateStr = date.getFullYear() +
+      String(date.getMonth()+1).padStart(2,'0') +
+      String(date.getDate()).padStart(2,'0');
+    saveAs(blob, 'modif_code_article_' + dateStr + '.zip');
+    showToast('ZIP telecharge avec succes');
+  });
+}
+
+function finishAndArchive() {
+  const date = new Date();
+  const dateStr = date.getFullYear() +
+    String(date.getMonth()+1).padStart(2,'0') +
+    String(date.getDate()).padStart(2,'0');
+  saveArchive(dateStr);
+
+  // Reset state for next operation
+  selectedEans.clear();
+  newCodes = {};
+  generatedFiles = {};
+
+  showToast('Operation archivee avec succes');
+  goToStep(1);
+}
+
+// ========================================================================
+// ARCHIVES (localStorage)
+// ========================================================================
+function saveArchive(dateStr) {
+  const archives = JSON.parse(localStorage.getItem('mca_archives') || '[]');
+  archives.unshift({
+    date: dateStr,
+    timestamp: new Date().toISOString(),
+    eans: [...selectedEans],
+    newCodes: { ...newCodes },
+    count: selectedEans.size
+  });
+  // Keep last 20
+  if (archives.length > 20) archives.length = 20;
+  localStorage.setItem('mca_archives', JSON.stringify(archives));
+  renderArchives();
+}
+
+function renderArchives() {
+  const archives = JSON.parse(localStorage.getItem('mca_archives') || '[]');
+  const container = document.getElementById('archives-list');
+  if (archives.length === 0) {
+    container.innerHTML = '<span style="color:var(--text2);font-size:0.85rem;">Aucune archive</span>';
+    return;
+  }
+  container.innerHTML = archives.map((a, i) =>
+    '<div class="archive-item">' +
+    '<span>' + a.date + ' - ' + a.count + ' EAN(s) modifies</span>' +
+    '<div>' +
+    '<button class="btn btn-sm btn-outline" onclick="viewArchive(' + i + ')">Voir</button> ' +
+    '<button class="btn btn-sm btn-danger" onclick="deleteArchive(' + i + ')">Suppr</button>' +
+    '</div></div>'
+  ).join('');
+}
+
+function viewArchive(index) {
+  const archives = JSON.parse(localStorage.getItem('mca_archives') || '[]');
+  const a = archives[index];
+  if (!a) return;
+  alert('Archive du ' + a.date + '\n\nEANs :\n' + a.eans.join('\n') +
+    '\n\nNouveaux codes :\n' + Object.entries(a.newCodes).map(([k,v]) => k + ' -> ' + v).join('\n'));
+}
+
+function deleteArchive(index) {
+  const archives = JSON.parse(localStorage.getItem('mca_archives') || '[]');
+  archives.splice(index, 1);
+  localStorage.setItem('mca_archives', JSON.stringify(archives));
+  renderArchives();
+}
+
+// ========================================================================
+// UTILS
+// ========================================================================
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ========================================================================
+// IndexedDB — persistance des gros fichiers (pas de limite de taille)
+// ========================================================================
+const DB_NAME = 'mca_db';
+const DB_VERSION = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = function(e) {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('data')) {
+        db.createObjectStore('data');
+      }
+    };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror = function(e) { reject(e.target.error); };
+  });
+}
+
+function dbSave(key, value) {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('data', 'readwrite');
+      tx.objectStore('data').put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  });
+}
+
+function dbLoad(key) {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('data', 'readonly');
+      const req = tx.objectStore('data').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+// Save current session state to IndexedDB
+function saveSession() {
+  const session = {
+    articlesData: articlesData,
+    stockData: stockData,
+    selectedEans: [...selectedEans],
+    newCodes: newCodes,
+    currentStep: currentStep
+  };
+  dbSave('session', session).then(() => {
+    console.log('[Session] Sauvegardee (' + articlesData.length + ' articles, ' + stockData.length + ' stock)');
+  }).catch(err => {
+    console.warn('[Session] Erreur sauvegarde:', err);
+  });
+}
+
+function restoreSession() {
+  return dbLoad('session').then(session => {
+    if (!session || !session.articlesData || session.articlesData.length === 0) return false;
+
+    articlesData = session.articlesData;
+    stockData = session.stockData;
+    selectedEans = new Set(session.selectedEans || []);
+    newCodes = session.newCodes || {};
+
+    document.getElementById('zone-articles').classList.add('loaded');
+    document.getElementById('info-articles').textContent = articlesData.length.toLocaleString('fr-FR') + ' articles (restaures)';
+    document.getElementById('zone-stock').classList.add('loaded');
+    document.getElementById('info-stock').textContent = stockData.length.toLocaleString('fr-FR') + ' lignes (restaurees)';
+
+    performMatch();
+
+    // Restore step
+    const step = session.currentStep || 1;
+    if (step > 1) {
+      setTimeout(() => goToStep(step), 100);
+    }
+
+    showToast('Session restauree');
+    return true;
+  }).catch(() => false);
+}
+
+// ========================================================================
+// INIT
+// ========================================================================
+(function init() {
+  renderArchives();
+  restoreSession();
+})();
+</script>
+</body>
+</html>
